@@ -73,7 +73,7 @@ def main():
 
     vocabulary_lookuper = index_table_from_file(vocab_data_file)
 
-    def preprocss(data, maxlen):
+    def preprocss(data, maxlen, **kwargs):
         raw_x = []
         raw_y_ner = []
         raw_y_cls = []
@@ -104,8 +104,10 @@ def main():
             raw_y_ner, maxlen, value=0, padding="post"
         )
 
+        from keras.utils import to_categorical
         y_cls = np.array(raw_y_cls)
         y_cls = y_cls[:, np.newaxis]
+        y_cls = to_categorical(y_cls, kwargs.get('cls_dims', 81))
 
         return x, y_ner, y_cls
 
@@ -128,12 +130,12 @@ def main():
 
 
     # get train/test data for training model
-    train_x, train_y_ner, train_y_cls = preprocss(train_data, MAX_SENTENCE_LEN)
-    test_x, test_y_ner, test_y_cls = preprocss(eval_data, MAX_SENTENCE_LEN)
-
     vacab_size = vocabulary_lookuper.size()
     tag_size = ner_tag_lookuper.size()
     label_size = cls_tag_lookuper.size()
+
+    train_x, train_y_ner, train_y_cls = preprocss(train_data, MAX_SENTENCE_LEN, **{'cls_dims':label_size})
+    test_x, test_y_ner, test_y_cls = preprocss(eval_data, MAX_SENTENCE_LEN, **{'cls_dims':label_size})
 
 
     # build model
@@ -176,13 +178,13 @@ def main():
     with tf.keras.backend.name_scope("CLS_branch"):
         from tensorflow.keras.layers import Dense, Flatten, Dropout
         # add paragraph vector
-        paragraph_vector = get_paragraph_vector(embedding_layer)
+        #paragraph_vector = get_paragraph_vector(embedding_layer)
 
         if chosen == "lstm_cls":
             cls_flat_lstm = Flatten()(biLSTM)
-            cls_flat_lstm = tf.keras.layers.concatenate([cls_flat_lstm, paragraph_vector])
+            #cls_flat_lstm = tf.keras.layers.concatenate([cls_flat_lstm, paragraph_vector])
             classification_dense = Dropout(0.2)(cls_flat_lstm)
-            classification_dense = SetLearningRate(Dense(label_size, activation='sigmoid', name='CLS'), lr=0.01, is_ada=True)(classification_dense)
+            classification_dense = SetLearningRate(Dense(label_size, activation='sigmoid', name='CLS'), lr=0.001, is_ada=True)(classification_dense)
 
         elif chosen == "conv_cls":
             from tensorflow.keras.layers import Conv1D, MaxPooling1D
@@ -237,12 +239,14 @@ def main():
     #                                               mode='auto')
     # callbacks_list.append(early_stop)
 
-
+    from mtnlpmodel.trainer.loss_func_util import FocalLoss
     adam_optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNINGRATE, beta_1=0.9, beta_2=0.999, amsgrad=False)
     model.compile(optimizer=adam_optimizer,
-                  loss={'crf': loss_func, 'CLS': 'sparse_categorical_crossentropy'},
-                  loss_weights={'crf': 1., 'CLS': 10.},  # set weight of loss
-                  metrics={'crf': SequenceCorrectness(), 'CLS': 'sparse_categorical_accuracy'} )
+                  #loss={'crf': loss_func, 'CLS': 'sparse_categorical_crossentropy'},
+                  loss={'crf': loss_func, 'CLS': FocalLoss()},
+                  loss_weights={'crf': 1., 'CLS': 100},  # set weight of loss
+                  #metrics={'crf': SequenceCorrectness(), 'CLS': 'sparse_categorical_accuracy'} )
+                  metrics={'crf': SequenceCorrectness(), 'CLS': 'categorical_accuracy'})
 
     model.fit(
         train_x,
