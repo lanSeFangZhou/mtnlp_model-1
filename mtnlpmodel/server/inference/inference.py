@@ -1,8 +1,7 @@
 #-*- coding: UTF-8 -*
 
 import sys
-sys.path.append('../model_inference/seq2annotation')
-sys.path.append('./savefile_convert')
+sys.path.append('../../../')
 import warnings
 warnings.filterwarnings('ignore')
 import json, os, time
@@ -10,8 +9,7 @@ from tokenizer_tools.tagset.offset.corpus import Corpus
 from deliverable_model import load
 from deliverable_model.request import Request
 
-import sys
-sys.path.append(r'D:\Code\python_code\mt_model_code\mtnlpmodel')
+
 
 '''
     调用模型对输入数据进行推理，即采用模型对输入数据做实体识别标注，
